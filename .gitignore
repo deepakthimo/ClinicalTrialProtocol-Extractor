@@ -1,0 +1,42 @@
+# Environment & Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+
+# Project outputs
+memory/
+logs/
+output_json/
+test_outputs/
+test_cropagent_vizualizer/
+tests/
+test_functionality/
+
+# Large test files
+*.pdf
+*.jpg
+*.png
+
+# Dev/test folders & files to exclude
+test_functionality/
+sample images/
+old_agents/
+agents/cortex_llm_config_for_multi_image.py
+pip.conf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

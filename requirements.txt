@@ -1,0 +1,34 @@
+# Core framework & Routing
+fastapi==0.135.1
+uvicorn==0.42.0
+
+# Dependencies
+pydantic>=2.9.0,<3.0.0
+pydantic-settings
+pydantic_core
+
+# Agent Orchestration
+langgraph>=1.0.8,<1.1.0
+langgraph-checkpoint==3.0.1
+langgraph-checkpoint-sqlite==3.0.3
+
+# PDF Processing
+PyMuPDF==1.26.7
+
+# Network Output
+requests==2.32.5
+httpx
+tenacity==9.1.2
+
+# Image Handling
+Pillow
+
+# Cloud Storage
+boto3==1.42.69
+google-cloud-storage==3.9.0
+
+# Cortex Authentication (Azure AD / APIM)
+msal
+
+# Database
+aiosqlite==0.22.0

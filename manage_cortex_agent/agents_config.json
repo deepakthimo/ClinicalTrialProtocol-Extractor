@@ -1,0 +1,120 @@
+{
+  "global_auth": {
+    "owners": []
+  },
+  "global_labels": {
+    "project": "clinical-pdf-extractor"
+  },
+  "agents": [
+    {
+      "base_name": "pageagent-extractor",
+      "description": "Extract all text from this image exactly as you see it.",
+      "multimodal": true,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "google-vertex",
+      "model_iteration": 22,
+      "labels": {
+        "agent": "page"
+      }
+    },
+    {
+      "base_name": "pageagent-reconciler",
+      "description": "You are an expert Clinical AI. Construct perfect Markdown.",
+      "multimodal": false,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "claude",
+      "model_iteration": 21,
+      "labels": {
+        "agent": "page"
+      }
+    },
+    {
+      "base_name": "pageagent-validator",
+      "description": "You are a strict QA Validator. Compare the generated Markdown text to the original IMAGE.",
+      "multimodal": true,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "claude",
+      "model_iteration": 20,
+      "labels": {
+        "agent": "page"
+      }
+    },
+    {
+      "base_name": "pageagent-fallback-best-effort-selector",
+      "description": "You are a Quality Selection Agent for clinical document extraction. You will see multiple extraction attempts for the SAME page, each with validator-identified discrepancies. Pick the BEST candidate — the one with the fewest and least severe errors.",
+      "multimodal": true,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "claude",
+      "model_iteration": 21,
+      "labels": {
+        "agent": "page"
+      }
+    },
+    {
+      "base_name": "masteragent-pdf-quality-validator",
+      "description": "Compare extracted TOC text to the image. If text is severely fragmented with random spaces (e.g. 'C l i n i c a l'), return FAIL.",
+      "multimodal": true,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "google-vertex",
+      "model_iteration": 23,
+      "labels": {
+        "agent": "master"
+      }
+    },
+    {
+      "base_name": "masteragent-synopsis-from-toc",
+      "description": "Find the 'Synopsis' or 'Executive Summary' in the TOC and output its page range list.",
+      "multimodal": false,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "claude",
+      "model_iteration": 21,
+      "labels": {
+        "agent": "master"
+      }
+    },
+    {
+      "base_name": "masteragent-synopsis-check",
+      "description": "You are a Clinical Data Validator. Analyze the text. Does it contain actual Clinical Trial Synopsis data (Objectives, Methodology, etc.)? If it is just a title page or missing core data, return FAIL.",
+      "multimodal": false,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "google-vertex",
+      "model_iteration": 23,
+      "labels": {
+        "agent": "master"
+      }
+    },
+    {
+      "base_name": "masteragent-sections-from-toc",
+      "description": "Goal is to map the actual sections found in the Table of Contents (TOC) to a specific list of REQUIRED STANDARD SECTIONS.",
+      "multimodal": false,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "google-vertex",
+      "model_iteration": 23,
+      "labels": {
+        "agent": "master"
+      }
+    },
+    {
+      "base_name": "cropagent-propose-bbox",
+      "description": "You are a Spatial Layout AI. Calculate a safe bounding box for the MAIN BODY text of a document.",
+      "multimodal": true,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "google-vertex",
+      "model_iteration": 22,
+      "labels": {
+        "agent": "crop"
+      }
+    },
+    {
+      "base_name": "cropagent-validate-bbox",
+      "description": "Validate the crop.",
+      "multimodal": true,
+      "no_context_prompt": "noinstructprompt",
+      "model_class": "claude",
+      "model_iteration": 20,
+      "labels": {
+        "agent": "crop"
+      }
+    }
+  ]
+}
