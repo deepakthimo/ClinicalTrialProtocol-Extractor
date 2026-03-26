@@ -32,3 +32,6 @@ msal
 
 # Database
 aiosqlite==0.22.0
+
+# lillys internal packages (from private PyPI)
+langchain-cortex==0.1.0

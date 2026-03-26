@@ -29,7 +29,6 @@ test_functionality/
 sample images/
 old_agents/
 agents/cortex_llm_config_for_multi_image.py
-pip.conf
 
 # IDE
 .vscode/
