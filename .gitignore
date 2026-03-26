@@ -40,3 +40,7 @@ pip.conf
 # OS
 .DS_Store
 Thumbs.db
+
+# Allow README images
+!utils/readme_images/
+!utils/readme_images/**
