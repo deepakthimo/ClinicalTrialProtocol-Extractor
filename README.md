@@ -29,19 +29,19 @@ An asynchronous, multi-agent PDF extraction pipeline built with **LangGraph** an
 
 The master graph manages the end-to-end extraction pipeline. It processes the PDF through sequential phases with two circuit breaker gates that can halt processing early.
 
-![Master Graph](utils\readme_images\master_agent.png)
+![Master Graph](utils/readme_images/master_agent.png)
 
 ### Page Agent — Per-Page Extraction (4 Nodes + Retry Loop)
 
 Each page goes through a VLM extraction → LLM reconciliation → VLM validation cycle. On failure, the error type determines whether to retry extraction (layout issues) or reconciliation (rule-following issues). After exhausting retries, a best-of-N judge selects the best attempt.
 
-![Page Agent](utils\readme_images\crop_agent.png)
+![Page Agent](utils/readme_images/crop_agent.png)
 
 ### Crop Agent — Bounding Box Calculation (3 Nodes + Retry Loop)
 
 The crop agent determines the optimal bounding box to exclude headers/footers from PDF pages. It leverages sponsor-specific memory to avoid recalculating known-good crop boxes.
 
-![Crop Agent](utils\readme_images\crop_agent.png)
+![Crop Agent](utils/readme_images/crop_agent.png)
 
 ---
 
