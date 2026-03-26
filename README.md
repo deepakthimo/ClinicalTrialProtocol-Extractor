@@ -23,7 +23,7 @@ An asynchronous, multi-agent PDF extraction pipeline built with **LangGraph** an
 
 ### High-Level System Flow
 
-![High level view](utils\readme_images\high-level-system-flow.png)
+![High level view](utils/readme_images/high-level-system-flow.png)
 
 ### Master Graph — Orchestrator (10 Nodes)
 
