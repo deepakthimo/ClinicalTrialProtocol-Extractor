@@ -120,7 +120,7 @@ async def background_extract_task(job_id: str, req: ExtractRequest):
         # 2. Acquire PDF-level concurrency slot before running the pipeline
         async with _pdf_semaphore:
             logger.info(f"🔓 Job [{job_id}]: Acquired PDF slot (limit: {MAX_CONCURRENT_PDFS})")
-            async with AsyncSqliteSaver.from_conn_string(r"C:\Users\DeepakTM\Music\Projects\lilly-pdf-extractor-agent\memory\master_graph_checkpoints.db") as memory:
+            async with AsyncSqliteSaver.from_conn_string(os.path.join(os.path.dirname(__file__), "memory", "master_graph_checkpoints.db")) as memory:
                 master_app = workflow.compile(checkpointer=memory)
                 
                 config = {
@@ -156,7 +156,7 @@ async def background_extract_task(job_id: str, req: ExtractRequest):
         # 4. Save Final Outputs
         final_json = result_state.get("final_dataset", {})
         
-        output_dir = "output_json"
+        output_dir = os.path.join(os.path.dirname(__file__), "output_json")
         os.makedirs(output_dir, exist_ok=True)
         filename = f"{nct_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         filepath = os.path.join(output_dir, filename)
@@ -290,10 +290,12 @@ async def health_check():
 @app.get("/api/v1/logs", response_class=PlainTextResponse)
 async def view_live_logs(lines: int = 200):
     """View the last N lines of the live extraction logs in your browser."""
-    log_path = r"C:\Users\DeepakTM\Music\Projects\lilly-pdf-extractor-agent\logs\agent_run.log"
-    if not os.path.exists(log_path):
+    import glob
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    log_files = sorted(glob.glob(os.path.join(log_dir, "pipeline_*.log")))
+    if not log_files:
         return "Log file not found. Have you started a job yet?"
-    
+    log_path = log_files[-1]  # most recent log file
     try:
         with open(log_path, "r", encoding="utf-8") as f:
             all_lines = f.readlines()

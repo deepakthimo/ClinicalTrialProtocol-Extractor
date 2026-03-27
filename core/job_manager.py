@@ -25,8 +25,8 @@ class JobManager:
     A SQLite-backed in-memory job manager to track the state of API-submitted PDF extractions.
     Ensures state is resilient across server restarts.
     """
-    def __init__(self, db_path: str = r"C:\Users\DeepakTM\Music\Projects\lilly-pdf-extractor-agent\memory\job_states.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = os.path.join(os.path.dirname(__file__), "..", "memory", "job_states.db")):
+        self.db_path = os.path.abspath(db_path)
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._init_db()
 

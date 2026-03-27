@@ -1,0 +1,39 @@
+# Python bytecode
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Version control
+.git/
+.gitignore
+
+# Runtime output dirs — container generates its own at startup
+logs/
+output_json/
+memory/
+
+# Large binary / media files
+*.pdf
+*.jpg
+*.jpeg
+*.png
+
+# Dev & test only — not needed at runtime
+tests/
+test_functionality/
+old_agents/
+sample images/
+
+# IDE / OS artifacts
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db

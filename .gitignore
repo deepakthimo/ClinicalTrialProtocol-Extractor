@@ -30,6 +30,10 @@ sample images/
 old_agents/
 agents/cortex_llm_config_for_multi_image.py
 
+# Auto-generated per-user file — must not be committed
+# Run: python manage_cortex_agent/manage_agents.py deploy && registry
+agents/agent_registry.py
+
 # IDE
 .vscode/
 .idea/
