@@ -1,34 +1,55 @@
 import time
 import requests
 
-# ==============================================================================
-# CONFIGURE THESE BEFORE RUNNING
-# ==============================================================================
 BASE_URL = "http://localhost:8000"
-POLL_INTERVAL_SECONDS = 300  # 5 minutes between status checks; adjust as needed based on expected processing time
+POLL_INTERVAL_SECONDS = 300  # 5 minutes between status checks
 
-SPONSOR_NAME = "Gilend Sciences"
-
-PDF_URLS = [
-    "https://cdn.clinicaltrials.gov/large-docs/95/NCT05770895/Prot_000.pdf",
-    "https://cdn.clinicaltrials.gov/large-docs/44/NCT05765344/Prot_000.pdf",
-    "https://cdn.clinicaltrials.gov/large-docs/00/NCT05760300/Prot_000.pdf",
-]
-# ==============================================================================
-
-TERMINAL_STATUSES = {"completed", "failed"}
+TERMINAL_STATUSES = {"COMPLETED", "FAILED"}
 
 
-def submit() -> list[dict]:
+def prompt_inputs() -> tuple[str, list[str]]:
+    """Interactively ask the user for sponsor name and PDF URLs."""
+    print("=" * 60)
+    print("  Lilly PDF Extractor — Batch Submit")
+    print("=" * 60)
+
+    sponsor = input("\nSponsor name (e.g. 'Pfizer', 'Boehringer Ingelheim'): ").strip()
+    if not sponsor:
+        raise SystemExit("❌ Sponsor name cannot be empty.")
+
+    print("\nEnter PDF URLs one per line.")
+    print("Leave a blank line when done:\n")
+    urls = []
+    while True:
+        url = input(f"  URL {len(urls) + 1}: ").strip()
+        if not url:
+            break
+        if not url.startswith("http"):
+            print("  ⚠️  Skipped — does not look like a valid URL.")
+            continue
+        urls.append(url)
+
+    if not urls:
+        raise SystemExit("❌ At least one PDF URL is required.")
+
+    print(f"\n✅ Sponsor : {sponsor}")
+    print(f"✅ PDFs    : {len(urls)}")
+    for u in urls:
+        print(f"   • {u}")
+    print()
+    return sponsor, urls
+
+
+def submit(sponsor: str, pdf_urls: list[str]) -> list[dict]:
     """POST all URLs as a single batch and return the list of job dicts."""
     payload = {
         "requests": [
-            {"pdf_url": url, "sponsor_name": SPONSOR_NAME}
-            for url in PDF_URLS
+            {"pdf_url": url, "sponsor_name": sponsor}
+            for url in pdf_urls
         ]
     }
 
-    print(f"Submitting {len(PDF_URLS)} PDF(s) for sponsor: '{SPONSOR_NAME}'")
+    print(f"Submitting {len(pdf_urls)} PDF(s) for sponsor: '{sponsor}'")
     print("-" * 60)
 
     response = requests.post(f"{BASE_URL}/api/v1/extract/batch", json=payload)
@@ -50,7 +71,7 @@ def poll(jobs: list[dict]):
     """Poll all jobs until every one reaches a terminal state."""
     # Track pending jobs as {job_id: status_url}
     pending = {job["job_id"]: job["status_url"] for job in jobs}
-    results = {}  # {job_id: final_status}
+    results = {}  # {job_id: {"status": str, "error_message": str | None}}
 
     print("=" * 60)
     print("Polling for results...")
@@ -70,8 +91,14 @@ def poll(jobs: list[dict]):
                 print(f"  [{job_id[:8]}...]  status: {status.upper()}")
 
                 if status in TERMINAL_STATUSES:
-                    results[job_id] = status
+                    results[job_id] = {
+                        "status": status,
+                        "error_message": data.get("error_message"),
+                    }
                     completed_this_round.append(job_id)
+                    if status == "FAILED":
+                        error_msg = data.get("error_message", "No error message provided")
+                        print(f"  [{job_id[:8]}...]  ❌ REASON: {error_msg}")
 
             except requests.RequestException as e:
                 print(f"  [{job_id[:8]}...]  ERROR polling status: {e}")
@@ -86,16 +113,20 @@ def poll(jobs: list[dict]):
     print("\n" + "=" * 60)
     print("FINAL SUMMARY")
     print("=" * 60)
-    for job_id, status in results.items():
-        icon = "✅" if status == "completed" else "❌"
-        print(f"  {icon}  {job_id}  →  {status.upper()}")
+    for job_id, info in results.items():
+        status = info["status"]
+        icon = "✅" if status == "COMPLETED" else "❌"
+        print(f"  {icon}  {job_id}  →  {status}")
+        if status == "FAILED" and info.get("error_message"):
+            print(f"       Reason: {info['error_message']}")
     print()
 
     total = len(results)
-    succeeded = sum(1 for s in results.values() if s == "completed")
+    succeeded = sum(1 for info in results.values() if info["status"] == "COMPLETED")
     print(f"  {succeeded}/{total} jobs completed successfully.")
 
 
 if __name__ == "__main__":
-    jobs = submit()
+    sponsor, pdf_urls = prompt_inputs()
+    jobs = submit(sponsor, pdf_urls)
     poll(jobs)

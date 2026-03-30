@@ -1,7 +1,9 @@
 import json
+import os
 
 # Load JSON file
-with open(r"C:\Users\DeepakTM\Music\Projects\lilly-pdf-extractor-agent\output_json\NCT02751385_20260312_155433.json", "r", encoding="utf-8") as f:
+input_file = os.path.join(os.path.dirname(__file__), "output_json", "NCT02751385_20260312_155433.json")
+with open(input_file, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 # Convert to Markdown

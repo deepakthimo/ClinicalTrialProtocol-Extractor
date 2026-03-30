@@ -16,7 +16,7 @@ from fastapi.responses import PlainTextResponse
 
 from core.job_manager import job_manager, JobRecord, JobStatus
 
-# 1. FIXED: Import workflow and AsyncSqliteSaver exactly like main.py
+# Import workflow graph and async checkpointer
 from agents.master_graph import workflow
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from core.initial_state import create_initial_state
@@ -151,7 +151,9 @@ async def background_extract_task(job_id: str, req: ExtractRequest):
                 logger.info(f"☁️ Job [{job_id}]: Abort status uploaded to GCP -> {abort_filename}")
             except Exception as cloud_e:
                 logger.warning(f"⚠️ Job [{job_id}]: Could not upload abort status to GCP: {cloud_e}")
-            raise Exception(f"Pipeline aborted at node '{abort_node}': {abort_reason}")
+            logger.warning(f"⚠️ Job [{job_id}]: PDF rejected at '{abort_node}' — marking ABORTED (not a system error).")
+            job_manager.update_job_status(job_id, JobStatus.ABORTED, error=abort_reason)
+            return
 
         # 4. Save Final Outputs
         final_json = result_state.get("final_dataset", {})

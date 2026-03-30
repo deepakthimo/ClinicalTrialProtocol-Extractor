@@ -51,21 +51,28 @@ The crop agent determines the optimal bounding box to exclude headers/footers fr
 lilly-pdf-extractor-agent/
 ├── app.py                          # FastAPI server, endpoints, background task manager, auto-resume
 ├── main.py                         # CLI entry point for standalone testing
+├── batch_submit.py                 # Interactive batch PDF submission script
 ├── requirements.txt                # Python dependencies
 ├── json2md.py                      # Utility: convert output JSON to markdown
+├── Dockerfile                      # Container image build (Python 3.12.4, full image)
+├── .dockerignore                   # Excludes test dirs, runtime output, etc.
+├── .env.example                    # Template for required environment variables
+├── pip.conf                        # Internal Artifactory registry for langchain-cortex
 │
 ├── agents/
 │   ├── master_graph.py             # LangGraph orchestrator (10 nodes)
 │   ├── page_agent.py               # Per-page extraction graph (4 nodes + retry)
 │   ├── crop_agent.py               # Bounding box calculation graph (3 nodes + retry)
-│   ├── agent_registry.py           # Maps agent roles → Cortex model copies (load balancing)
-│   └── cortex_llm_config.py        # Cortex API wrapper (auth, retry, structured output)
+│   ├── cortex_langchain.py         # LangChain-based Cortex LLM wrapper (active, OAuth2 + AWS auth)
+│   ├── cortex_llm_config.py        # Legacy Cortex API wrapper (kept for reference)
+│   └── agent_registry.py           # [AUTO-GENERATED per-user — do not commit]
+│                                   #   Maps agent roles → Cortex model copies (load balancing)
 │
 ├── core/
 │   ├── config.py                   # Environment variables and tuning knobs
 │   ├── state.py                    # TypedDict state schemas + Pydantic validation models
 │   ├── initial_state.py            # Factory: creates base state dict for pipeline
-│   ├── job_manager.py              # SQLite job persistence (PENDING → IN_PROGRESS → COMPLETED → FAILED)
+│   ├── job_manager.py              # SQLite job persistence (PENDING → IN_PROGRESS → COMPLETED | FAILED | ABORTED)
 │   └── logger.py                   # Dual-output logger (console + file)
 │
 ├── prompts/
@@ -83,12 +90,12 @@ lilly-pdf-extractor-agent/
 │   ├── cloud_storage.py            # Unified AWS S3 / GCP / local storage manager
 │   └── title_card.py               # ASCII art banner display
 │
-├── manage_cortex_agent/
+├── manage_cortex_agent/            # Local dev only — NOT included in Docker image
 │   ├── manage_agents.py            # Script to provision/manage Cortex agent copies
 │   ├── agents_config.json          # Agent deployment configuration
 │   └── README.md                   # Agent management documentation
 │
-├── memory/                         # Runtime data (gitignored)
+├── memory/                         # Runtime data (gitignored, Docker volume at /app/memory)
 │   ├── sponsor_based_crop_memory.json  # Learned crop boxes per sponsor
 │   ├── job_states.db               # SQLite job tracking database
 │   ├── master_graph_checkpoints.db # LangGraph checkpoint database
@@ -106,15 +113,21 @@ lilly-pdf-extractor-agent/
 
 ## Getting Started
 
-The setup script handles the full lifecycle — from environment validation to agent cleanup — in a single command. This is the recommended way for team members to run the pipeline.
+Docker is the recommended way for team members to run the pipeline. It bundles all dependencies, avoids version conflicts, and provides a reproducible environment.
 
-### Step 1: Clone & Install
+### Prerequisites
+
+- **Docker Desktop** installed and running
+- A populated `.env` file (copy from `.env.example`)
+- `gcp-service-account-key.json` in the project root (for GCP uploads — optional)
+- `agents/agent_registry.py` generated (see Step 1 below)
+
+### Step 1: Deploy Cortex Agents & Generate Registry
+
+Before building the Docker image, deploy your Cortex agent copies and generate the registry file. This must be run from a local Python environment with network access to `cortex.lilly.com`:
 
 ```bash
-git clone <repository-url>
-cd lilly-pdf-extractor-agent
-
-# Create and activate a virtual environment
+# Create and activate a virtual environment (one-time)
 python -m venv .venv
 
 # Windows
@@ -125,34 +138,24 @@ source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Deploy agents and generate the registry
+python manage_cortex_agent/manage_agents.py deploy
 ```
+
+This creates `agents/agent_registry.py` — an auto-generated file that maps agent roles to your personal Cortex model copies. It is gitignored because each team member gets their own set of agents prefixed with their `OWNER_EMAIL`.
+
+> **Note:** Each team member uses their own `OWNER_EMAIL`. This prefixes all deployed agent names with your identity (e.g. `deepaktm-pageagent-extractor`), keeping each person's agents isolated.
 
 ### Step 2: Configure Environment
 
-Create a `.env` file in the project root with your credentials:
+Copy `.env.example` to `.env` and fill in your credentials:
 
-```env
-# ── Your Identity (Required) ──
-OWNER_EMAIL=your.name@network.lilly.com
-
-# ── Cortex Agent Management (Required) ──
-CORTEX_COOKIE=your-cortex-cookie
-
-# ── Cloud Storage (Optional — falls back to local) ──
-AWS_S3_BUCKET_NAME=your-s3-bucket
-GCP_BUCKET_NAME=your-gcp-bucket
-
-# ── Tuning (Optional — sensible defaults provided) ──
-MAX_CONCURRENT_PDFS=1
-MAX_CONCURRENT_SECTIONS=5
-LLM_TIMEOUT_SECONDS=180
-LLM_TIMEOUT_MULTIMODAL_SECONDS=240
-LLM_RETRY_ATTEMPTS=4
-PAGE_RETRY_ATTEMPTS=2
-PAGE_RETRY_BACKOFF_SECONDS=60
-PAGE_THROTTLE_SECONDS=3
-DEBUG=false
+```bash
+cp .env.example .env
 ```
+
+See the `.env.example` file for all available variables and their descriptions.
 
 <details>
 <summary><b>Environment Variables Reference (click to expand)</b></summary>
@@ -180,59 +183,48 @@ DEBUG=false
 
 </details>
 
-> **Note:** Each team member uses their own `OWNER_EMAIL`. This prefixes all deployed agent names with your identity (e.g. `deepaktm-pageagent-extractor`), keeping each person's agents isolated.
-
-### Step 3: Run the Setup Script
-
-**Windows:**
-
-```cmd
-setup.bat
-```
-
-**Linux / macOS:**
+### Step 3: Build the Docker Image
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+docker build -t lilly-pdf-extractor .
 ```
 
-### What the Script Does
+The image uses `python:3.12.4` (full, not slim) to avoid corporate network issues with `deb.debian.org`. `pip.conf` is baked in so that the internal Artifactory registry is available during the build.
 
-```
-setup.sh / setup.bat
-│
-├── Step 1: Validate environment variables (OWNER_EMAIL, CORTEX_COOKIE, ...)
-├── Step 2: Verify Python installation & install missing dependencies
-├── Step 3: Deploy Cortex agents (prefixed with your name)
-│           └── Generate agents/agent_registry.py
-├── Step 4: Start FastAPI server in the background
-│           └── http://0.0.0.0:8000 (API docs at /docs)
-│
-│   ... server is running, send extraction requests ...
-│
-├── Ctrl+C pressed
-│   ├── Stop FastAPI server
-│   └── Delete ALL deployed Cortex agents (clean teardown)
-└── Exit
-```
-
-The full lifecycle is managed automatically — when you're done, just press **Ctrl+C** and all your Cortex agents are cleaned up.
-
-### Step 4: Submit an Extraction Request
-
-With the server running, submit a PDF via curl or any HTTP client:
+### Step 4: Run the Container
 
 ```bash
+docker run -p 8000:8000 \
+  -v lilly-memory:/app/memory \
+  -v lilly-output:/app/output_json \
+  -v lilly-logs:/app/logs \
+  --name lilly-extractor \
+  lilly-pdf-extractor
+```
+
+The three `-v` flags mount **named Docker volumes** so that SQLite databases, output JSON files, and logs persist across container restarts.
+
+The API is now available at `http://localhost:8000` (Swagger docs at `/docs`).
+
+On startup, the server automatically checks for interrupted jobs (PENDING, IN_PROGRESS, or FAILED) and resumes them. ABORTED jobs are not retried.
+
+### Step 5: Submit an Extraction Request
+
+Submit a PDF via curl, the Swagger UI at `/docs`, or the interactive batch script:
+
+```bash
+# Single PDF via curl
 curl -X POST http://localhost:8000/api/v1/extract \
   -H "Content-Type: application/json" \
   -d '{"pdf_url": "https://example.com/clinical-protocol.pdf", "sponsor_name": "Eli Lilly"}'
+
+# Interactive batch submission (prompts for sponsor + PDF URLs)
+python batch_submit.py
 ```
 
 Then check the status:
 
 ```bash
-# Replace <job_id> with the ID from the response
 curl http://localhost:8000/api/v1/status/<job_id>
 ```
 
@@ -242,17 +234,45 @@ And retrieve results when complete:
 curl http://localhost:8000/api/v1/results/<job_id>
 ```
 
-### Manual Start (Server Only)
-
-If agents are already deployed and the registry is generated, you can start just the server:
+### Container Management
 
 ```bash
+# Stop the container
+docker stop lilly-extractor
+
+# Restart an existing container
+docker start lilly-extractor
+
+# Remove the container (volumes are preserved)
+docker rm lilly-extractor
+
+# Rebuild after code changes
+docker build -t lilly-pdf-extractor .
+docker run -p 8000:8000 \
+  -v lilly-memory:/app/memory \
+  -v lilly-output:/app/output_json \
+  -v lilly-logs:/app/logs \
+  --name lilly-extractor \
+  lilly-pdf-extractor
+```
+
+### Local Development (without Docker)
+
+For development / debugging, you can run the server directly:
+
+```bash
+# Activate the virtual environment created in Step 1
+# Windows
+.venv\Scripts\activate
+
+# Linux/macOS
+source .venv/bin/activate
+
+# Start the server
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-> **Warning:** Manual start does not set up the Ctrl+C cleanup trap. You must manually delete agents with `python manage_cortex_agent/manage_agents.py delete` when done.
-
-On startup, the server automatically checks for interrupted jobs and resumes them.
+> **Note:** When done, clean up your Cortex agents with `python manage_cortex_agent/manage_agents.py delete`.
 
 ---
 
@@ -335,13 +355,21 @@ GET /api/v1/status/{job_id}
 ```json
 {
   "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "status": "completed",
+  "status": "COMPLETED",
   "error_message": null,
   "result_url": "/api/v1/results/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 }
 ```
 
-Possible `status` values: `pending`, `in_progress`, `completed`, `failed`
+Possible `status` values:
+
+| Status | Meaning |
+|:---|:---|
+| `PENDING` | Job queued, waiting for a pipeline slot |
+| `IN_PROGRESS` | Pipeline is actively processing |
+| `COMPLETED` | Extraction finished successfully — results available |
+| `FAILED` | System error (LLM timeout, network issue, etc.) — retried on restart |
+| `ABORTED` | PDF rejected by quality checks (scanned, unreadable, etc.) — **not** retried |
 
 ---
 
@@ -384,18 +412,28 @@ GET /health
 
 ## Monitoring Logs
 
-To watch real-time extraction progress in a separate terminal:
-
-**Windows (PowerShell):**
-
-```powershell
-Get-Content -Path logs\agent_run.log -Wait -Tail 20
-```
-
-**Linux / macOS:**
+**Docker container logs (recommended):**
 
 ```bash
-tail -f logs/agent_run.log
+docker logs -f lilly-extractor
+```
+
+**Browser (API endpoint):**
+
+Visit `http://localhost:8000/api/v1/logs?lines=200` to view the last N lines of the extraction log.
+
+**Local development (host filesystem):**
+
+Windows (PowerShell):
+
+```powershell
+Get-Content -Path logs\pipeline_*.log -Wait -Tail 50
+```
+
+Linux / macOS:
+
+```bash
+tail -f logs/pipeline_*.log
 ```
 
 ---
@@ -432,3 +470,5 @@ The pipeline produces a JSON object where each key is a normalized section title
 | Crop Memory | `memory/sponsor_based_crop_memory.json` | Learned bounding box coordinates per sponsor (max 3 per sponsor) |
 | PDF Cache | `memory/pdf_cache/` | Downloaded PDFs cached by job ID |
 | Final Output | `output_json/` | Generated JSON datasets by NCT number + timestamp |
+
+> **Docker volumes:** When running in Docker, mount `memory/`, `output_json/`, and `logs/` as named volumes (see [Step 4](#step-4-run-the-container)) so that all data survives container restarts. Without volumes, data is lost when the container is removed.

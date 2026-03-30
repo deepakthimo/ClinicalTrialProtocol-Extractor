@@ -282,16 +282,16 @@ page_workflow = StateGraph(PageState)
 
 page_workflow.add_node("extract", node_extract_vlm)
 page_workflow.add_node("reconcile", node_reconcile_llm)
-page_workflow.add_node("validate", node_validate_vlm)
+page_workflow.add_node("page_validate", node_validate_vlm)
 page_workflow.add_node("select_best", node_select_best)
 
 page_workflow.set_entry_point("extract")
 page_workflow.add_edge("extract", "reconcile")
-page_workflow.add_edge("reconcile", "validate")
+page_workflow.add_edge("reconcile", "page_validate")
 page_workflow.add_edge("select_best", END)
 
 page_workflow.add_conditional_edges(
-    "validate",
+    "page_validate",
     should_continue,
     {
         "end": END,

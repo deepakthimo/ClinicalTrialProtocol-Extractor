@@ -106,7 +106,7 @@ async def node_validate_pdf_quality(state: MasterState) -> MasterState:
     logger.debug(f"🌐 [STATE DUMP] node_validate_pdf_quality completed. State Keys: {list(state.keys()) + ['pdf_status']}")
     return {
         "pdf_status": result.status,
-        "abort_node": "validate" if result.status == "FAIL" else "",
+        "abort_node": "validate_pdf_quality" if result.status == "FAIL" else "",
         "abort_reason": result.reason if result.status == "FAIL" else "",
     }
 
@@ -485,7 +485,7 @@ async def node_assemble_dataset(state: MasterState) -> MasterState:
 # --- BUILD MASTER GRAPH ---
 workflow = StateGraph(MasterState)
 workflow.add_node("extract_toc", node_extract_toc)
-workflow.add_node("validate", node_validate_pdf_quality)
+workflow.add_node("validate_pdf_quality", node_validate_pdf_quality)
 workflow.add_node("check_synopsis", node_check_synopsis_sufficiency)
 workflow.add_node("map_synopsis", node_map_synopsis_from_toc)
 workflow.add_node("map_sections", node_map_sections_from_toc)
@@ -497,9 +497,9 @@ workflow.add_node("assemble", node_assemble_dataset)
 
 # Routing Flow
 workflow.set_entry_point("extract_toc")
-workflow.add_conditional_edges("validate", check_pdf_quality, {"end": END, "continue": "map_synopsis"})
+workflow.add_conditional_edges("validate_pdf_quality", check_pdf_quality, {"end": END, "continue": "map_synopsis"})
 
-workflow.add_edge("extract_toc", "validate")
+workflow.add_edge("extract_toc", "validate_pdf_quality")
 workflow.add_edge("map_synopsis", "map_sections")
 workflow.add_edge("map_sections", "calculate_crop")
 workflow.add_edge("calculate_crop", "ingest")

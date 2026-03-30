@@ -10,6 +10,7 @@ class JobStatus(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    ABORTED = "ABORTED"  # PDF rejected by quality check — not a system error, not retried on restart
 
 class JobRecord(BaseModel):
     job_id: str
@@ -104,11 +105,12 @@ class JobManager:
         return None
 
     def get_incomplete_jobs(self) -> List[JobRecord]:
-        """Returns jobs that are stuck in PENDING or IN_PROGRESS state."""
+        """Returns jobs that are stuck in PENDING, IN_PROGRESS, or FAILED state.
+        ABORTED jobs are NOT retried — they represent PDF quality issues, not system errors."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM jobs WHERE status IN (?, ?, ?)", 
-                           (JobStatus.PENDING.value, JobStatus.IN_PROGRESS.value, JobStatus.FAILED.value)) # Added FAILED to retry failed jobs
+                           (JobStatus.PENDING.value, JobStatus.IN_PROGRESS.value, JobStatus.FAILED.value))
             rows = cursor.fetchall()
             return [self._row_to_record(row) for row in rows]
 

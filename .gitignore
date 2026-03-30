@@ -24,8 +24,7 @@ test_functionality/
 *.jpg
 *.png
 
-# Dev/test folders & files to exclude
-test_functionality/
+# Dev and old agents folders & files to exclude
 sample images/
 old_agents/
 agents/cortex_llm_config_for_multi_image.py
