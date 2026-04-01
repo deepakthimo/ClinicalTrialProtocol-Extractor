@@ -52,7 +52,8 @@ lilly-pdf-extractor-agent/
 ├── app.py                          # FastAPI server, endpoints, background task manager, auto-resume
 ├── main.py                         # CLI entry point for standalone testing
 ├── batch_submit.py                 # Interactive batch PDF submission script
-├── requirements.txt                # Python dependencies
+├── requirements.txt                # Python dependencies (installed inside Docker)
+├── requirements_local.txt          # Lightweight deps for local pre-build steps (requests, python-dotenv)
 ├── json2md.py                      # Utility: convert output JSON to markdown
 ├── Dockerfile                      # Container image build (Python 3.12.4, full image)
 ├── .dockerignore                   # Excludes test dirs, runtime output, etc.
@@ -136,14 +137,18 @@ python -m venv .venv
 # Linux/macOS
 source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install only the lightweight local dependencies (NOT the full requirements.txt)
+pip install -r requirements_local.txt
 
-# Deploy agents and generate the registry
+# Deploy agents to Cortex
 python manage_cortex_agent/manage_agents.py deploy
+
+# Generate agents/agent_registry.py (must run BEFORE building the Docker image)
+python manage_cortex_agent/manage_agents.py registry
 ```
 
-This creates `agents/agent_registry.py` — an auto-generated file that maps agent roles to your personal Cortex model copies. It is gitignored because each team member gets their own set of agents prefixed with their `OWNER_EMAIL`.
+- **`deploy`** — creates your personal Cortex agent copies on `cortex.lilly.com`.
+- **`registry`** — generates `agents/agent_registry.py`, a local Python file that maps agent roles to your deployed copies. This file is gitignored because each team member gets their own set of agents.
 
 > **Note:** Each team member uses their own `OWNER_EMAIL`. This prefixes all deployed agent names with your identity (e.g. `deepaktm-pageagent-extractor`), keeping each person's agents isolated.
 

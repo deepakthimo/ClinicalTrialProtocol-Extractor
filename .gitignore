@@ -43,6 +43,9 @@ agents/agent_registry.py
 .DS_Store
 Thumbs.db
 
+# credentials/
+gcp-service-account-key.json
+
 # Allow README images
 !utils/readme_images/
 !utils/readme_images/**

@@ -163,7 +163,24 @@ def should_enable_thinking(model_class, model_iteration) -> bool:
     return model_class.strip().lower() == "claude" and iteration > 14
 
 
-def deploy_agents(config_file=None):
+def _validate_session():
+    """Quick auth check — GET /model to confirm cookie is valid."""
+    try:
+        r = requests.get(BASE_URL, headers=HEADERS, timeout=15)
+        if r.status_code == 401 or r.status_code == 403:
+            print(f"❌ AUTH FAILED (HTTP {r.status_code}). CORTEX_COOKIE is invalid or expired.")
+            print("   Update CORTEX_COOKIE in your .env and try again.")
+            sys.exit(1)
+        if r.status_code != 200:
+            print(f"⚠️  Pre-flight check returned HTTP {r.status_code}: {r.text[:200]}")
+            print("   Proceeding anyway, but deployment may fail.\n")
+    except requests.RequestException as e:
+        print(f"⚠️  Pre-flight check failed: {e}")
+        print("   Cannot reach Cortex API. Check your network/VPN.\n")
+        sys.exit(1)
+
+
+def deploy_agents(config_file=None, dry_run=False):
     """Reads JSON and POSTs configurations to create agents."""
     config_file = config_file or _DEFAULT_CONFIG
     owner_prefix = _get_owner_prefix()
@@ -177,6 +194,10 @@ def deploy_agents(config_file=None):
         global_owners = [OWNER_EMAIL] + global_owners
     global_users = config["global_auth"].get("users", [])
     global_labels = config.get("global_labels", {})
+
+    if not dry_run:
+        print("🔑 Validating session cookie...")
+        _validate_session()
 
     print("🚀 STARTING BULK AGENT DEPLOYMENT...\n")
 
@@ -214,8 +235,8 @@ def deploy_agents(config_file=None):
                 agent.get("model_iteration"),
             )
             
-            # Inject custom prompt template
-            payload["prompts"]["no_context"] = agent["no_context_prompt"]
+            # NOTE: prompt is already set in the if/else block above;
+            # do NOT override it again here for agent-chain types.
             
             # Inject Auth
             payload["auth"]["owners"] = global_owners
@@ -230,12 +251,32 @@ def deploy_agents(config_file=None):
 
             payload["labels"] = merged_labels
 
+            if dry_run:
+                print(f"[DRY RUN] Would create: {name}")
+                print(json.dumps(payload, indent=2))
+                continue
+
             time.sleep(2.5)
             print(f"Creating: {name} ... ", end="")
             response = requests.post(BASE_URL, headers=HEADERS, json=payload)
             
             if response.status_code == 200:
-                print("✅ SUCCESS")
+                # Parse response body — some APIs return 200 with error in body
+                try:
+                    body = response.json()
+                    if isinstance(body, dict) and body.get("error"):
+                        print(f"⚠️  HTTP 200 but API returned error: {body['error']}")
+                        continue
+                except (ValueError, KeyError):
+                    body = response.text
+
+                # Verify the agent actually exists on the platform
+                verify = requests.get(f"{BASE_URL}/{name}", headers=HEADERS, timeout=15)
+                if verify.status_code == 200:
+                    print("✅ SUCCESS (verified)")
+                else:
+                    print(f"⚠️  POST succeeded but GET verification failed (HTTP {verify.status_code})")
+                    print(f"   Response body was: {str(body)[:300]}")
             else:
                 print(f"❌ FAILED ({response.status_code}) -> {response.text}")
 
@@ -299,12 +340,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage Cortex Agents")
     parser.add_argument("action", choices=["deploy", "delete", "registry"],
                         help="Action to perform: 'deploy', 'delete', or 'registry' (regenerate agent_registry.py)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print payloads without actually creating agents")
     args = parser.parse_args()
 
     if args.action == "registry":
         generate_registry()
     elif args.action == "deploy":
-        deploy_agents()
+        deploy_agents(dry_run=args.dry_run)
     elif args.action == "delete":
         # Double check before mass deletion
         confirm = input("Are you sure you want to DELETE all agents in the config? (y/n): ")

@@ -1,0 +1,5 @@
+# Lightweight dependencies for local pre-build steps only.
+# Used by: manage_cortex_agent/manage_agents.py (deploy + registry)
+# The full requirements.txt is installed inside the Docker container.
+requests
+python-dotenv
